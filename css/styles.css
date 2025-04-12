@@ -199,6 +199,7 @@ body.nav-expanded {
         justify-content: center;
         align-items: center;
         color: white;
+        transition: left 0.3s ease;
     }
     
     .side-navbar.expanded .navbar-toggle {
