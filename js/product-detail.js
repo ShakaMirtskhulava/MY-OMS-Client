@@ -9,29 +9,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
-    // Side Navbar Elements
-    const sideNavbar = document.querySelector('.side-navbar');
-    const navbarToggle = document.getElementById('navbar-toggle');
-    const toggleIcon = document.getElementById('toggle-icon');
-    const contentContainer = document.querySelector('.content-container');
-    
-    // Setup Navbar Toggle
-    navbarToggle.addEventListener('click', function() {
-        sideNavbar.classList.toggle('expanded');
-        
-        if (sideNavbar.classList.contains('expanded')) {
-            toggleIcon.classList.remove('fa-chevron-right');
-            toggleIcon.classList.add('fa-chevron-left');
-            contentContainer.classList.remove('nav-collapsed');
-            contentContainer.classList.add('nav-expanded');
-        } else {
-            toggleIcon.classList.remove('fa-chevron-left');
-            toggleIcon.classList.add('fa-chevron-right');
-            contentContainer.classList.remove('nav-expanded');
-            contentContainer.classList.add('nav-collapsed');
-        }
-    });
-
     // Get query parameters
     const urlParams = new URLSearchParams(window.location.search);
     const productId = urlParams.get('id');
@@ -65,7 +42,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Check user role and show admin options if user is an administrator
-    checkUserRole();    // Set up delete product button handler
+    checkUserRole();
+    
+    // Set up delete product button handler
     deleteProductBtn.addEventListener('click', function() {
         if (confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
             deleteProduct(productId);
@@ -145,7 +124,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Set up images
         setupProductImages(product.images);
-    }/**
+    }
+
+    /**
      * Checks the current user's role and shows admin options if the user is an administrator
      */
     async function checkUserRole() {

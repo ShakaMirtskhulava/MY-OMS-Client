@@ -19,6 +19,11 @@ document.addEventListener('DOMContentLoaded', function() {
         localStorage.removeItem('registrationError');
     }
 
+    // DOM elements
+    const loadingSpinner = document.getElementById('loading-spinner');
+    const errorMessage = document.getElementById('error-message');
+    const profileContent = document.getElementById('profile-content');
+    
     // Set up logout button handler
     document.getElementById('logout-btn').addEventListener('click', function(e) {
         e.preventDefault();
@@ -30,37 +35,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add event listener for delete company button
     document.getElementById('delete-company-btn').addEventListener('click', deleteCompany);
 
-    // Side Navbar Elements
-    const sideNavbar = document.querySelector('.side-navbar');
-    const navbarToggle = document.getElementById('navbar-toggle');
-    const toggleIcon = document.getElementById('toggle-icon');
-    const contentContainer = document.querySelector('.content-container');
-    
-    // Setup Navbar Toggle
-    navbarToggle.addEventListener('click', function() {
-        sideNavbar.classList.toggle('expanded');
-        
-        if (sideNavbar.classList.contains('expanded')) {
-            toggleIcon.classList.remove('fa-chevron-right');
-            toggleIcon.classList.add('fa-chevron-left');
-            contentContainer.classList.remove('nav-collapsed');
-            contentContainer.classList.add('nav-expanded');
-        } else {
-            toggleIcon.classList.remove('fa-chevron-left');
-            toggleIcon.classList.add('fa-chevron-right');
-            contentContainer.classList.remove('nav-expanded');
-            contentContainer.classList.add('nav-collapsed');
-        }
-    });
-
     // Fetch and display user profile data
-    fetchUserProfile();
+    fetchProfileData();
 });
 
 /**
  * Fetches the current user's profile information from the API
  */
-async function fetchUserProfile() {
+async function fetchProfileData() {
     const token = localStorage.getItem('token');
     const loadingSpinner = document.getElementById('loading-spinner');
     const errorMessage = document.getElementById('error-message');
