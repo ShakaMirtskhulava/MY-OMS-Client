@@ -1,6 +1,14 @@
 /**
  * Profile page functionality for Order Management System
  */
+
+// Global variables for the map functionality
+let map;
+let marker;
+let selectedLatitude = null;
+let selectedLongitude = null;
+let locationModal;
+
 document.addEventListener('DOMContentLoaded', function() {
     // Check if user is logged in
     const token = localStorage.getItem('token');
@@ -8,6 +16,9 @@ document.addEventListener('DOMContentLoaded', function() {
         window.location.href = 'login.html';
         return;
     }
+
+    // Initialize Bootstrap modal
+    locationModal = new bootstrap.Modal(document.getElementById('locationModal'));
 
     // Check for registration error message
     const registrationError = localStorage.getItem('registrationError');
@@ -35,9 +46,104 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add event listener for delete company button
     document.getElementById('delete-company-btn').addEventListener('click', deleteCompany);
 
+    // Add event listener for add location button
+    document.getElementById('add-location-btn').addEventListener('click', function() {
+        // Reset form values
+        document.getElementById('location-name').value = '';
+        document.getElementById('latitude').value = '';
+        document.getElementById('longitude').value = '';
+        
+        // Reset error and success messages
+        document.getElementById('location-error').classList.add('d-none');
+        document.getElementById('location-success').classList.add('d-none');
+        
+        // Show the modal
+        locationModal.show();
+    });
+
+    // Add event listener for save location button
+    document.getElementById('save-location-btn').addEventListener('click', saveLocation);
+
     // Fetch and display user profile data
     fetchProfileData();
 });
+
+// Google Maps initialization callback
+function initMap() {
+    // Default coordinates (center of the world)
+    const defaultLocation = { lat: 0, lng: 0 };
+    
+    // Create a new map centered at the default location
+    map = new google.maps.Map(document.getElementById('map'), {
+        zoom: 2,
+        center: defaultLocation,
+        mapTypeId: 'roadmap',
+        styles: [
+            { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
+            { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
+            { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
+            {
+                featureType: 'administrative.locality',
+                elementType: 'labels.text.fill',
+                stylers: [{ color: '#d59563' }]
+            },
+            {
+                featureType: 'poi',
+                elementType: 'labels.text.fill',
+                stylers: [{ color: '#d59563' }]
+            },
+            {
+                featureType: 'road',
+                elementType: 'geometry',
+                stylers: [{ color: '#38414e' }]
+            },
+            {
+                featureType: 'road',
+                elementType: 'geometry.stroke',
+                stylers: [{ color: '#212a37' }]
+            },
+            {
+                featureType: 'road',
+                elementType: 'labels.text.fill',
+                stylers: [{ color: '#9ca5b3' }]
+            },
+            {
+                featureType: 'water',
+                elementType: 'geometry',
+                stylers: [{ color: '#17263c' }]
+            }
+        ]
+    });
+    
+    // Add click listener to the map
+    map.addListener('click', function(event) {
+        placeMarker(event.latLng);
+    });
+}
+
+// Function to place a marker on the map
+function placeMarker(location) {
+    // Remove existing marker if any
+    if (marker) {
+        marker.setMap(null);
+    }
+    
+    // Create a new marker
+    marker = new google.maps.Marker({
+        position: location,
+        map: map,
+        animation: google.maps.Animation.DROP
+    });
+    
+    // Update the coordinates in the form
+    selectedLatitude = location.lat();
+    selectedLongitude = location.lng();
+    document.getElementById('latitude').value = selectedLatitude;
+    document.getElementById('longitude').value = selectedLongitude;
+    
+    // Center the map on the selected location
+    map.setCenter(location);
+}
 
 /**
  * Fetches the current user's profile information from the API
@@ -98,10 +204,14 @@ async function fetchCompanyData(userRole, showCompanyInfo = true) {
     const token = localStorage.getItem('token');
     const loadingSpinner = document.getElementById('loading-spinner');
     const errorMessage = document.getElementById('error-message');
-    const profileContent = document.getElementById('profile-content');    const companyInfoContainer = document.getElementById('company-info-container');
+    const profileContent = document.getElementById('profile-content');    
+    const companyInfoContainer = document.getElementById('company-info-container');
     const createCompanyBtnContainer = document.getElementById('create-company-btn-container');
     const deleteCompanyBtnContainer = document.getElementById('delete-company-btn-container');    
-    const registerUserBtnContainer = document.getElementById('register-user-btn-container');    // For Admin role, show Register User button immediately
+    const registerUserBtnContainer = document.getElementById('register-user-btn-container');    
+    const addLocationBtn = document.getElementById('add-location-btn');
+    
+    // For Admin role, show Register User button immediately
     if (userRole === 'Admin') {
         registerUserBtnContainer.classList.remove('d-none');
         // Show Create Product button for Admin users
@@ -139,15 +249,23 @@ async function fetchCompanyData(userRole, showCompanyInfo = true) {
             }
             
             // Hide company info since there's no company
-            hideCompanyInfo();        } else if (response.ok && data.data) {
+            hideCompanyInfo();
+        } else if (response.ok && data.data) {
             // Company found - display company data
             displayCompanyData(data.data);
             
-            // For RootUser, show delete button and Register User button
+            // Display locations if available
+            if (data.data.locations) {
+                displayLocations(data.data.locations, userRole);
+            }
+            
+            // For RootUser, show delete button, Register User button, and Add Location button
             if (userRole === 'RootUser') {
                 deleteCompanyBtnContainer.classList.remove('d-none');
                 // Show Register User button only if RootUser has a company
                 registerUserBtnContainer.classList.remove('d-none');
+                // Show Add Location button
+                addLocationBtn.classList.remove('d-none');
             }
         } else {
             throw new Error(data.message || `Error: ${response.status}`);
@@ -216,6 +334,68 @@ function displayCompanyData(companyData) {
 }
 
 /**
+ * Displays the locations list in the UI
+ * @param {Array} locations - Array of location objects
+ * @param {String} userRole - The user's role
+ */
+function displayLocations(locations, userRole) {
+    const locationsListElement = document.getElementById('locations-list');
+    locationsListElement.innerHTML = '';
+
+    if (!locations || locations.length === 0) {
+        locationsListElement.innerHTML = '<div class="text-secondary">No locations available</div>';
+        return;
+    }
+
+    // Check if there's only one location (for disable delete button logic)
+    const isLastLocation = locations.length === 1;
+
+    locations.forEach(location => {
+        const locationItem = document.createElement('div');
+        locationItem.className = 'list-group-item d-flex justify-content-between align-items-center';
+        locationItem.style.backgroundColor = '#283444';
+        locationItem.style.border = '1px solid #334155';
+        locationItem.style.marginBottom = '8px';
+        locationItem.style.borderRadius = '5px';
+        locationItem.style.color = '#fff';
+
+        // Create location name and details
+        const locationInfo = document.createElement('div');
+        locationInfo.innerHTML = `
+            <div><strong>${location.name}</strong></div>
+            <div class="text-secondary small">Lat: ${location.latitude}, Lng: ${location.longitude}</div>
+            <div class="text-secondary small">ID: ${location.id}</div>
+        `;
+
+        // Create delete button (only for RootUser)
+        const actionsContainer = document.createElement('div');
+        if (userRole === 'RootUser') {
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'btn btn-danger btn-sm';
+            deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+            deleteBtn.title = 'Delete Location';
+
+            // Disable button if this is the last location
+            if (isLastLocation) {
+                deleteBtn.disabled = true;
+                deleteBtn.title = 'Cannot delete the last location';
+                deleteBtn.style.opacity = '0.5';
+                deleteBtn.style.cursor = 'not-allowed';
+            } else {
+                deleteBtn.addEventListener('click', () => deleteLocation(location.id));
+            }
+            
+            actionsContainer.appendChild(deleteBtn);
+        }
+
+        // Add elements to the location item
+        locationItem.appendChild(locationInfo);
+        locationItem.appendChild(actionsContainer);
+        locationsListElement.appendChild(locationItem);
+    });
+}
+
+/**
  * Hides company info by setting all fields to N/A
  */
 function hideCompanyInfo() {
@@ -281,9 +461,162 @@ async function deleteCompany() {
 }
 
 /**
- * Ensures a URL has an http/https prefix
- * @param {string} url - The URL to check and potentially modify
- * @returns {string} - The URL with http:// prefix if needed
+ * Handles saving a new location
+ */
+async function saveLocation() {
+    const token = localStorage.getItem('token');
+    const locationName = document.getElementById('location-name').value.trim();
+    const errorElement = document.getElementById('location-error');
+    const successElement = document.getElementById('location-success');
+    
+    // Reset messages
+    errorElement.classList.add('d-none');
+    successElement.classList.add('d-none');
+    
+    // Validate input
+    if (!locationName) {
+        errorElement.textContent = 'Please enter a location name';
+        errorElement.classList.remove('d-none');
+        return;
+    }
+    
+    if (selectedLatitude === null || selectedLongitude === null) {
+        errorElement.textContent = 'Please select a location on the map';
+        errorElement.classList.remove('d-none');
+        return;
+    }
+    
+    // Prepare data for API
+    const locationData = {
+        name: locationName,
+        latitude: selectedLatitude,
+        longitude: selectedLongitude
+    };
+    
+    try {
+        const response = await fetch('https://distribo-api.azurewebsites.net/v1/locations', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(locationData)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            // Success
+            successElement.textContent = 'Location added successfully';
+            successElement.classList.remove('d-none');
+            
+            // Refresh company data to update locations list
+            setTimeout(() => {
+                locationModal.hide();
+                const userRole = document.getElementById('user-role').querySelector('span').textContent;
+                fetchCompanyData(userRole, true);
+            }, 1500);
+        } else if (response.status === 409) {
+            // Location name already exists
+            errorElement.textContent = 'A location with this name already exists for your company';
+            errorElement.classList.remove('d-none');
+        } else {
+            // Other error
+            errorElement.textContent = data.message || 'An error occurred while adding the location';
+            errorElement.classList.remove('d-none');
+        }
+    } catch (error) {
+        console.error('Error adding location:', error);
+        errorElement.textContent = 'Failed to save location. Please try again.';
+        errorElement.classList.remove('d-none');
+    }
+}
+
+/**
+ * Handles deleting a location
+ * @param {string} locationId - The ID of the location to delete
+ */
+async function deleteLocation(locationId) {
+    if (!locationId) {
+        console.error('Cannot delete location: No location ID provided');
+        return;
+    }
+
+    console.log('Attempting to delete location with ID:', locationId);
+    
+    if (!confirm('Are you sure you want to delete this location?')) {
+        return;
+    }
+    
+    const token = localStorage.getItem('token');
+    const errorMessage = document.getElementById('error-message');
+    
+    try {
+        // First, check if we have more than one location
+        const companyResponse = await fetch('https://distribo-api.azurewebsites.net/v1/companies/me', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const companyData = await companyResponse.json();
+        
+        if (companyResponse.ok && companyData.data && companyData.data.locations) {
+            if (companyData.data.locations.length <= 1) {
+                alert('Cannot delete the last location. Companies must have at least one location.');
+                return;
+            }
+        }
+        
+        // Now proceed with deletion using query parameter format
+        const response = await fetch(`https://distribo-api.azurewebsites.net/v1/locations?id=${locationId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        // Log the response for debugging
+        console.log('Delete location response status:', response.status);
+        
+        // Handle response based on status code
+        if (response.ok) {
+            alert('Location deleted successfully');
+            // Refresh the locations list
+            const userRole = document.getElementById('user-role').querySelector('span').textContent;
+            fetchCompanyData(userRole, true);
+        } else {
+            const data = await response.json();
+            console.error('Delete location API error response:', data);
+            
+            if (response.status === 400) {
+                if (data.code === 'HasApprovedOrders') {
+                    alert('Cannot delete location because it has approved orders');
+                } else if (data.code === 'CompanyMustHaveOneLocation') {
+                    alert('Cannot delete the last location. Companies must have at least one location');
+                } else {
+                    alert(data.message || 'An error occurred while deleting the location');
+                }
+            } else if (response.status === 404) {
+                alert('Location not found. It may have been already deleted.');
+            } else {
+                throw new Error(data.message || `Error: ${response.status}`);
+            }
+        }
+    } catch (error) {
+        console.error('Error deleting location:', error);
+        errorMessage.textContent = `Failed to delete location: ${error.message}`;
+        errorMessage.classList.remove('d-none');
+    }
+}
+
+/**
+ * Ensures a URL has http/https prefix
+ * @param {string} url - The URL to ensure has http prefix
+ * @returns {string} The URL with http prefix
  */
 function ensureHttpPrefix(url) {
     if (!url) return '';
